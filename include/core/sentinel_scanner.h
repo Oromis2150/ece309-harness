@@ -1,6 +1,9 @@
 #ifndef SENTINEL_SCANNER_H
 #define SENTINEL_SCANNER_H
 
+#include <string>
+#include <string_view>
+
 class SentinelScanner
 {
 public:
