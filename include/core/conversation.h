@@ -2,6 +2,9 @@
 #define CONVERSATION_H
 
 #include "core/message.h"
+#include <stdexcept>
+#include <utility>
+#include <cstddef>
 
 class Conversation {
 public:
@@ -10,14 +13,20 @@ public:
     // Releases all owned Message storage. No effect if already empty
     // (e.g. moved-from).
     ~Conversation();
+
+
     // Deep copy: allocates its own buffer and copies every Message.
     // this->begin() must differ from other.begin() afterward.
     Conversation(const Conversation &other);
     Conversation &operator=(const Conversation &other);
+
+
     // Steals other's buffer — no per-element copying. Afterward, other
     // must be left valid and empty (safe to destroy or reassign).
     Conversation(Conversation &&other) noexcept;
     Conversation &operator=(Conversation &&other) noexcept;
+
+
     // Appends m, growing the backing array if needed. Amortized O(1) —
     // document and justify your growth strategy in the design log
     // (see Appendix C if you want a refresher first).
@@ -36,6 +45,8 @@ private:
     Message *data_ = nullptr;
     std::size_t size_ = 0;
     std::size_t capacity_ = 0;
+
+    void swap(Conversation& other) noexcept;
 };
 
 #endif /* CONVERSATION_H */
