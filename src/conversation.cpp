@@ -1,4 +1,6 @@
 #include "core/conversation.h"
+#include <stdexcept>
+#include <utility>
 
 // Default Constructor and Destructor
 Conversation::Conversation() {}
@@ -13,15 +15,21 @@ Conversation::Conversation(const Conversation &other)
 {
     if (other.data_ != nullptr)
     {
-        this->data_ = new Message[other.capacity_];
-        for (std::size_t i = 0; i < other.size_; ++i)
-        {
-            data_[i] = other.data_[i];
+        data_ = new Message[other.capacity_];
+        try {
+            for (std::size_t i = 0; i < other.size_; ++i) {
+                data_[i] = other.data_[i];
+            }
+        }
+        catch (...) {
+            delete[] data_;
+            data_ = nullptr;
+            throw;
         }
     }
     else
     {
-        this->data_ = nullptr;
+        data_ = nullptr;
     }
     size_ = other.size_;
     capacity_ = other.capacity_;

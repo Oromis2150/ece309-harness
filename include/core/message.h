@@ -1,7 +1,8 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
-#include <string.h>
+#include <string>
+#include <utility>
 
 enum class Role {System, User, Assistant};
 

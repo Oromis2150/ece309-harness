@@ -1,0 +1,4 @@
+C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/miniharness.dir
+C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/test_p2.dir
+C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/ZERO_CHECK.dir
