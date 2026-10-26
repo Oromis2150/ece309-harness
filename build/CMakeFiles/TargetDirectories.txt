@@ -1,4 +1,8 @@
-C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/miniharness.dir
-C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/test_p2.dir
-C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/oromi/ECE309/ece309-harness/build/CMakeFiles/ZERO_CHECK.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/harness_core.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/miniharness.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/test_p2.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/test_p3.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/test_loop.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/test.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/edit_cache.dir
+/home/oromis/ece309/ece309-harness/build/CMakeFiles/rebuild_cache.dir

@@ -1,298 +1,221 @@
 // tests/p2/test_p2.cpp
 //
-// YOUR test suite goes here. At least 12 assert-based test cases — see
-// spec §5 for the required categories and the sample test for the
-// expected level of rigor.
-//
-// This file is a stub so the project builds out of the box; replace the
-// body of main() with your own tests.
+// PROVIDED. P2 regression suite. It uses only the P2 public interface of
+// Conversation and SentinelScanner, plus the provided Harness with NO tools,
+// so it must pass unchanged on top of your P2 code (interface-freeze rule).
+// You may add your own P2 tests to this file.
 
-#undef NDEBUG
+#include "../mini_test.h"
+
 #include "core/conversation.h"
-#include "core/message.h"
 #include "core/sentinel_scanner.h"
 #include "harness/harness.h"
+#include "harness/transcript.h"
 #include "model/replay_client.h"
-#include "model/scripted_client.h"
 
-#include <cassert>
-#include <iostream>
-#include <utility>
+#include <cstdio>
 #include <memory>
 #include <string>
-#include <stdexcept>
-#include <fstream>
 #include <vector>
 
-#define TEST(name) static void name()
-#define RUN(name) do { name(); std::cout << "PASS " #name "\n"; } while (0)
+namespace {
 
-static const std::string SENTINEL = "<|end_conversation|>";
-
-// ---------------------------- Helpers -------------------------------------------------------
-static bool same(const Message& x, const Message& y) {
-    return x.role() == y.role() && x.content() == y.content();
-}
-
-static bool same_conv(const Conversation& a, const Conversation& b) {
-    if (a.size() != b.size()) return false;
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        if (!same(a.at(i), b.at(i))) return false;
+class LinesInput : public InputSource {
+public:
+    explicit LinesInput(std::vector<std::string> lines) : lines_(std::move(lines)) {}
+    std::string read_line() override {
+        if (i_ >= lines_.size()) { eof_ = true; return ""; }
+        return lines_[i_++];
     }
-    return true;
-}
+    bool is_eof() const override { return eof_; }
+private:
+    std::vector<std::string> lines_;
+    std::size_t i_ = 0;
+    bool eof_ = false;
+};
 
-static Message msg(std::size_t i) {
-    return Message(i % 2 ? Role::Assistant : Role::User, "message #" + std::to_string(i));
-}
+class StringOutput : public OutputSink {
+public:
+    std::string data;
+    void write(std::string_view t) override { data += t; }
+};
 
-struct ScanResult {std::string safe; bool found; };
-
-static ScanResult scan_pieces(const std::vector<std::string>& pieces) {
-    SentinelScanner s(SENTINEL);
-    ScanResult r{"", false};
-    for (const auto& p : pieces) {
-        auto o = s.feed(p);
-        r.safe += o.safe_text;
-        r.found = r.found || o.sentinel_found;
+class FixedModel : public ModelClient {
+public:
+    using ModelClient::generate;
+    explicit FixedModel(std::string reply, std::size_t chunk = 0)
+        : reply_(std::move(reply)), chunk_(chunk) {}
+    void generate(const Conversation&, TokenSink& sink) override {
+        if (chunk_ == 0) sink.on_chunk(reply_);
+        else for (std::size_t i = 0; i < reply_.size(); i += chunk_) sink.on_chunk(reply_.substr(i, chunk_));
+        sink.on_complete();
     }
-    if (!r.found) r.safe += s.flush().safe_text;
-    return r;
+private:
+    std::string reply_;
+    std::size_t chunk_;
+};
+
+std::string scan_all(SentinelScanner& s, const std::vector<std::string>& chunks, bool* found) {
+    std::string out;
+    *found = false;
+    for (const auto& c : chunks) {
+        auto r = s.feed(c);
+        out += r.safe_text;
+        if (r.sentinel_found) { *found = true; return out; }
+    }
+    out += s.flush().safe_text;
+    return out;
 }
 
-// -------------------------------Message/Conversation Tests --------------------------------------------
+const std::string kSent = "<|end_conversation|>";
 
-TEST(MessageDefaultIsEmptySystem) {
-    Message m;
-    assert(m.role() == Role::System);
-    assert(m.content().empty());
-}
+}  // namespace
 
-TEST(EmptyConversationBounds) {
+// ---------------------------------------------------------------- Conversation
+
+TEST(conv_empty) {
     Conversation c;
-    assert(c.size() == 0);
-    assert(c.begin() == c.end());
-
-    bool threw = false;
-    try { (void)c.at(0); } catch (const std::out_of_range&) { threw = true; }
-    assert(threw && "at(0) on empty conversation must throw");
-
-    int n = 0;
-    for (const Message&m : c) { (void)m; ++n; }
-    assert(n == 0);
+    CHECK(c.size() == 0);
+    CHECK(c.begin() == c.end());
 }
 
-TEST(AtIsBoundsChecked) {
+TEST(conv_append_and_order) {
     Conversation c;
-    for (std::size_t i = 0; i < 5; ++i) c.append(msg(i));
-    assert(same(c.at(4), msg(4)));
-
-    bool threw = false;
-    try { (void)c.at(5); } catch (const std::out_of_range&) { threw = true; }
-    assert(threw && "at(size()) must throw");
-
-    threw = false;
-    try { (void)c.at(static_cast<std::size_t>(-1)); }
-    catch (const std::out_of_range&) { threw = true; }
-    assert(threw && "at(huge) must throw");
+    c.append(Message(Role::System, "sys"));
+    for (int i = 0; i < 100; ++i) c.append(Message(Role::User, std::to_string(i)));
+    REQUIRE(c.size() == 101);
+    CHECK(c.at(0).role() == Role::System);
+    for (int i = 0; i < 100; ++i) CHECK(c.at(i + 1).content() == std::to_string(i));
 }
 
-TEST(SystemMessageStaysFirst) {
+TEST(conv_holds_tool_role) {   // P3: the new enum value must flow through
     Conversation c;
-    c.append(Message(Role::System, "Be concise."));
-    for (std::size_t i = 0; i < 100; ++i) c.append(msg(i));
-
-    assert(c.at(0).role() == Role::System);
-    assert(c.at(0).content() == "Be concise.");
-    assert(c.begin()->role() == Role::System);
-
-    // Survives Copy and Move
-    Conversation copy(c);
-    assert(copy.at(0).role() == Role::System && copy.at(0).content() == "Be concise.");
-    Conversation moved(std::move(c));
-    assert(moved.at(0).role() == Role::System && moved.at(0).content() == "Be concise.");
-
-    for (std::size_t i = 0; i < 100; ++i) assert(same(moved.at(i + 1), msg(i)));
+    c.append(Message(Role::Tool, "<|tool_result|>{}<|/tool_result|>"));
+    REQUIRE(c.size() == 1);
+    CHECK(c.at(0).role() == Role::Tool);
 }
 
-TEST(ConversationCopyIsDeep) {
+TEST(conv_range_for) {
+    Conversation c;
+    for (int i = 0; i < 10; ++i) c.append(Message(Role::User, std::to_string(i)));
+    int k = 0;
+    for (const Message& m : c) CHECK(m.content() == std::to_string(k++));
+    CHECK(k == 10);
+}
+
+TEST(conv_copy_is_deep) {
     Conversation a;
-    a.append(Message(Role::User, "Hello"));
-    a.append(Message(Role::Assistant, "How can I help you?"));
-    Conversation b(a);
-
-    assert(b.begin() != a.begin()); // Different buffers
-    assert(same_conv(a, b));
-
-    b.append(Message(Role::System, "Notification"));
-    assert(a.size() == 2 && b.size() == 3);
-    assert(same(a.at(1), Message(Role::Assistant, "How can I help you?")));
-
-    Conversation* heap = new Conversation(a);
-    delete heap;
-    assert(same_conv(a,b) == false); // b should have an extra message   
-}
-
-TEST(CopyAssignmentAndCopyOfEmpty) {
-    Conversation empty;
-    Conversation e2(empty);
-    assert(e2.size() == 0 && e2.begin() == e2.end());
-
-    Conversation a;
-    for (std::size_t i = 0; i < 7; ++i) {
-        a.append(msg(i));
-    }
-
-    Conversation b;
-    for (std::size_t i = 0; i < 3; ++i) {
-        b.append(msg(100 + i));
-    }
-    b = a;
-    assert(b.begin() != a.begin());
-    assert(same_conv(a, b));
-
-    Conversation& self = b;
-    b = self;
-    assert(b.size() == 7 && same_conv(a, b));
-
-    b = empty;
-    assert(b.size() == 0 && b.begin() == b.end());
-}
-
-TEST(GrowthAndReallocation) {
-    // Doubling capacity
-
-    auto is_realloc_point = [](std::size_t n) { return n == 0 || (n & (n-1)) == 0; };
-
+    for (int i = 0; i < 5; ++i) a.append(Message(Role::User, "m" + std::to_string(i)));
+    Conversation b = a;
+    REQUIRE(b.size() == a.size());
+    CHECK(a.begin() != b.begin());
+    b.append(Message(Role::User, "only in b"));
+    CHECK(a.size() == 5);
+    CHECK(b.size() == 6);
     Conversation c;
-    const Message* prev = c.begin();
-    std::size_t reallocs = 0;
-    const std::size_t N = 1000;
-
-    for (std::size_t i = 0; i < N; ++i) {
-        c.append(msg(i));
-        const Message* now = c.begin();
-        bool moved = (now != prev);
-        assert(moved == is_realloc_point(i) && "buffer must move iff size==capacity before the append");
-        
-        if (moved) ++reallocs;
-        prev = now;
-
-        assert(c.size() == i + 1);
-        assert(same(c.at(i), msg(i)));
-        assert(same(c.at(0), msg(0)));
-    }
-
-    for (std::size_t i = 0; i < N; ++i) assert(same(c.at(i), msg(i)));
-
-    assert(reallocs == 11);
-
-    std::size_t k = 0;
-    for (const Message& m : c) assert(same(m, msg(k++)));
-    assert(k == N);
-    assert(c.end() - c.begin() == static_cast<std::ptrdiff_t>(N));
+    c = a;
+    CHECK(c.begin() != a.begin());
+    CHECK(c.at(4).content() == "m4");
+    Conversation& alias = c;
+    c = alias;   // self-assignment must be harmless
+    CHECK(c.size() == 5);
 }
 
-TEST(ConversationMoveStealsBuffer) {
+TEST(conv_move_steals) {
     Conversation a;
-    for (std::size_t i = 0; i < 10; ++i) a.append(msg(i));
-    const Message* original_ptr = a.begin();
-
-    Conversation b(std::move(a));
-    assert(b.begin() == original_ptr && "move ctor must steal the pointer");
-    assert(b.size() == 10);
-
-    // Moved-from object must be valid and empty
-    assert(a.size() == 0);
-    assert(a.begin() == nullptr && a.end() == nullptr);
-    a.append(msg(42));
-    assert(a.size() == 1 && same(a.at(0), msg(42)));
-
-    // Move assignment must steal and free the target's old buffer
+    for (int i = 0; i < 5; ++i) a.append(Message(Role::User, "x"));
+    const Message* p = a.begin();
+    Conversation b = std::move(a);
+    CHECK(b.begin() == p);
+    CHECK(a.size() == 0);   // NOLINT(bugprone-use-after-move): spec requires valid+empty
     Conversation c;
-    for (std::size_t i = 0; i < 4; ++i) c.append(msg(200 + i));
-    const Message* b_ptr = b.begin();
+    c.append(Message(Role::User, "old"));
     c = std::move(b);
-    assert(c.begin() == b_ptr && c.size() == 10);
-    assert(b.size() == 0 && b.begin() == nullptr);
-
-    // Self-move must not destroy data
-    Conversation& cref = c;
-    c = std::move(cref);
-    assert(c.size() == 10 && same(c.at(9), msg(9)));
+    CHECK(c.begin() == p);
+    CHECK(c.size() == 5);
+    a.append(Message(Role::User, "moved-from is reusable"));
+    CHECK(a.size() == 1);
 }
 
-// ---------------------------------SentinelScanner Tests-----------------------------------------
+// ---------------------------------------------------------- SentinelScanner
 
-TEST(ScannerCleanText) {
-    auto r = scan_pieces({"Hello world. Nothing to see here."});
-    assert(!r.found);
-    assert(r.safe == "Hello world. Nothing to see here.");
-
-    auto r2 = scan_pieces({"", "abc", ""});
-    assert(!r2.found && r2.safe == "abc");
-    auto r3 = scan_pieces({});
-    assert(!r3.found && r3.safe.empty());
+TEST(scan_clean_text) {
+    SentinelScanner s(kSent);
+    bool found = false;
+    CHECK(scan_all(s, {"Just ", "some text."}, &found) == "Just some text.");
+    CHECK(!found);
 }
 
-TEST(ScanWholeSentinelInOneChunk) {
-    SentinelScanner s(SENTINEL);
-    auto out = s.feed("Goodbye." + SENTINEL);
-    assert(out.sentinel_found);
-    assert(out.safe_text == "Goodbye.");
-}
-
-TEST(ScanSentinelSplitIntoThree) {
-    const std::string text = "Bye." + SENTINEL;
-    for (std::size_t i = 0; i <= text.size(); ++i) {
-        for (std::size_t j = 0; j < text.size(); ++j) {
-            SentinelScanner s(SENTINEL);
-            std::string safe;
-            bool found = false;
-
-            for (const std::string& piece : {text.substr(0,i), text.substr(i, j - i), text.substr(j)}) {
-                auto o = s.feed(piece);
-                safe += o.safe_text;
-                found = found || o.sentinel_found;
-            }
-            assert(found && safe == "Bye.");
-        }
+TEST(scan_every_split) {
+    const std::string text = "Goodbye." + kSent;
+    for (std::size_t split = 0; split <= text.size(); ++split) {
+        SentinelScanner s(kSent);
+        bool found = false;
+        std::string out = scan_all(s, {text.substr(0, split), text.substr(split)}, &found);
+        CHECK(found);
+        CHECK(out == "Goodbye.");
     }
 }
 
-TEST(ScanOneCharAtATime) {
-    const std::string text = "Goodbye." + SENTINEL;
-    SentinelScanner s(SENTINEL);
-    std::string safe;
-    std::size_t found_at = std::string::npos;
+TEST(scan_one_byte_at_a_time) {
+    const std::string text = "abc<|end_<|end_conv" + kSent + "ignored";
+    SentinelScanner s(kSent);
+    std::vector<std::string> chunks;
+    for (char ch : text) chunks.push_back(std::string(1, ch));
+    bool found = false;
+    CHECK(scan_all(s, chunks, &found) == "abc<|end_<|end_conv");
+    CHECK(found);
+}
 
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        auto o = s.feed(std::string_view(&text[i], 1));
-        safe += o.safe_text;
-        if (o.sentinel_found) { found_at = i; break; }
+TEST(scan_false_alarm) {
+    SentinelScanner s(kSent);
+    bool found = false;
+    CHECK(scan_all(s, {"Here is <|end_", "world|> done"}, &found) == "Here is <|end_world|> done");
+    CHECK(!found);
+}
+
+// ------------------------------------------------- Harness (no tools = P2)
+
+TEST(harness_turn_limit) {
+    LinesInput in({"a", "b", "c", "d", "e"});
+    StringOutput out;
+    HarnessConfig cfg;
+    cfg.max_turns = 2;
+    Harness h(std::make_unique<FixedModel>("reply"), cfg);
+    CHECK(h.run(in, out).kind == StopReason::Kind::TurnLimit);
+    CHECK(h.conversation().size() == 4);
+}
+
+TEST(harness_eof) {
+    LinesInput in({});
+    StringOutput out;
+    Harness h(std::make_unique<FixedModel>("reply"), HarnessConfig{});
+    CHECK(h.run(in, out).kind == StopReason::Kind::UserExit);
+}
+
+TEST(harness_sentinel_halts_and_is_hidden) {
+    LinesInput in({"hi", "again"});
+    StringOutput out;
+    Harness h(std::make_unique<FixedModel>("Bye now." + kSent, 3), HarnessConfig{});
+    CHECK(h.run(in, out).kind == StopReason::Kind::Sentinel);
+    CHECK(out.data.find("<|end_") == std::string::npos);
+    CHECK(out.data.find("Bye now.") != std::string::npos);
+}
+
+TEST(harness_transcript_round_trip) {
+    const std::string path = "p2_round_trip.txt";
+    {
+        LinesInput in({"one", "two"});
+        StringOutput out;
+        Harness h(std::make_unique<FixedModel>("same reply"), HarnessConfig{});
+        h.run(in, out);
+        REQUIRE(save_transcript(h.conversation(), path));
     }
-    assert(found_at == text.size() - 1 && "must report on the final '>' exactly");
-    assert(safe == "Goodbye.");
+    ReplayModelClient replay(path);
+    Conversation empty;
+    CHECK(replay.generate(empty).content() == "same reply");
+    CHECK(replay.generate(empty).content() == "same reply");
+    std::remove(path.c_str());
 }
 
-int main() {
-
-    // Conversation Tests
-    RUN(MessageDefaultIsEmptySystem);
-    RUN(EmptyConversationBounds);
-    RUN(SystemMessageStaysFirst);
-    RUN(AtIsBoundsChecked);
-    RUN(ConversationCopyIsDeep);
-    RUN(GrowthAndReallocation);
-    RUN(CopyAssignmentAndCopyOfEmpty);
-    RUN(ConversationMoveStealsBuffer);
-
-    // Scanner Tests
-    RUN(ScannerCleanText);
-    RUN(ScanWholeSentinelInOneChunk);
-    RUN(ScanSentinelSplitIntoThree);
-    RUN(ScanOneCharAtATime);
-
-    // TODO: write your tests here.
-    return 0;
-}
+int main(int argc, char** argv) { return mt::run_all(argc, argv); }
