@@ -1,37 +1,58 @@
-# ECE 309 — Project 2 starter code
+# ECE 309 · Project 3 starter — Tool Use and the Tool Registry
 
-This is the starter repo for Project 2 (see the spec for full details).
+Read `P3_spec.md` (in this folder) first. This file only covers setting up the repo.
 
-## What's provided vs. what's yours
+## 1. Bring your P2 code
 
-Everything under `include/model/`, `include/harness/`, `src/model_client.cpp`,
-`src/scripted_client.cpp`, `src/replay_client.cpp`, `src/harness.cpp`, and
-`src/main.cpp` is given, working code — read it, don't modify it.
+Copy four files from your P2 repo (details in `src/core/README.md`):
 
-You write:
-
-- `include/core/message.h` (+ optional `src/message.cpp`)
-- `include/core/conversation.h` / `src/conversation.cpp`
-- `include/core/sentinel_scanner.h` / `src/sentinel_scanner.cpp`
-- `tests/p2/test_p2.cpp`
-- `docs/design-log-p2.md`
-
-## Build and run
-
-```bash
-cmake -S . -B build
-cmake --build build
+```
+include/core/conversation.h      include/core/sentinel_scanner.h
+src/core/conversation.cpp        src/core/sentinel_scanner.cpp
 ```
 
-This builds two targets:
+Do **not** copy `message.h`; the P3 one adds `Role::Tool`.
 
-- `./build/miniharness` — the interactive CLI
-- `./build/test_p2` — your test suite
-
-Try it once your `Conversation` and `SentinelScanner` compile:
+If your P2 code doesn't work, build against the instructor's reference instead:
 
 ```bash
-./build/miniharness --script scripts/greeting.script --save transcript.txt
+cmake -S . -B build -DUSE_P2_REFERENCE=ON
 ```
 
-Press Ctrl-D on an empty line to end the conversation early.
+## 2. Build and test (Linux / WSL2)
+
+```bash
+cmake -S . -B build              # ASan + UBSan are on by default
+cmake --build build -j
+./build/test_p2                  # P2 regression: must pass before you start
+./build/test_loop                # provided tool-loop tests: pass once your 3 pieces work
+./build/test_p3                  # your P3 tests
+cd build && ctest --output-on-failure   # everything, plus the end-to-end goldens
+```
+
+To check that you compile with zero warnings, as the grader does, add
+`-DMH_WERROR=ON` to the configure line.
+
+## 3. Try the harness
+
+```bash
+./build/miniharness --no-tools --script scripts/greeting.script   # works on day 1
+./build/miniharness --tools                                       # needs your ToolRegistry
+./build/miniharness --script scripts/tools_demo.script            # needs all three pieces
+./build/miniharness --script scripts/escape_attempt.script
+```
+
+`tools_demo` writes `workspace/notes/summary.txt`. That's fine: the e2e tests
+use their own copy in `tests/e2e/workspace/`. To start the demo over, delete
+that file.
+
+## 4. What is yours
+
+| File | Status |
+|---|---|
+| `src/tools/tool_registry.cpp` and the private section of `include/tools/tool_registry.h` | **you implement** (45 pts) |
+| `src/tools/workspace.cpp` (`Workspace::resolve` only) | **you implement** (15 pts) |
+| `src/tools/calculator_eval.cpp` (`calc_evaluate`) | **you implement** (10 pts) |
+| `tests/p3/test_p3.cpp` (≥ 15 tests) | **you write** |
+| `docs/design-log-p3.md` | **you write** |
+| everything else | provided, do not modify |

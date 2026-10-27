@@ -1,0 +1,132 @@
+Start testing: Oct 26 22:32 EDT
+----------------------------------------------------------
+1/4 Testing: p2_regression
+1/4 Test: p2_regression
+Command: "/home/oromis/ece309/ece309-harness/build/test_p2"
+Directory: /home/oromis/ece309/ece309-harness/build
+"p2_regression" start time: Oct 26 22:32 EDT
+Output:
+----------------------------------------------------------
+[PASS] conv_empty
+[PASS] conv_append_and_order
+[PASS] conv_holds_tool_role
+[PASS] conv_range_for
+[PASS] conv_copy_is_deep
+[PASS] conv_move_steals
+[PASS] scan_clean_text
+[PASS] scan_every_split
+[PASS] scan_one_byte_at_a_time
+[PASS] scan_false_alarm
+[PASS] harness_turn_limit
+[PASS] harness_eof
+[PASS] harness_sentinel_halts_and_is_hidden
+[PASS] harness_transcript_round_trip
+
+---- summary ----
+  conv           6 /   6
+  harness        4 /   4
+  scan           4 /   4
+  TOTAL         14 /  14
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"p2_regression" end time: Oct 26 22:32 EDT
+"p2_regression" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/4 Testing: p3
+2/4 Test: p3
+Command: "/home/oromis/ece309/ece309-harness/build/test_p3"
+Directory: /home/oromis/ece309/ece309-harness/build
+"p3" start time: Oct 26 22:32 EDT
+Output:
+----------------------------------------------------------
+[PASS] reg_add_and_find
+[PASS] reg_duplicate_keeps_original
+[PASS] ws_rejects_parent_escape
+[PASS] calc_precedence
+[PASS] calc_division_by_zero
+[PASS] reg_null_and_empty
+[PASS] reg_for_each
+buckets=16384 load=0.610352 max_chain=6 weak_chain=9000
+[PASS] reg_scale_and_weak_hash
+[PASS] reg_hash_order
+[PASS] ws_normal_paths
+[PASS] ws_invalid_paths
+[PASS] calc_subtract_left_to_right
+[PASS] calc_divide_left_to_right
+[PASS] calc_parentheses
+[PASS] calc_trace_example
+[PASS] calc_negatives
+[PASS] calc_fraction
+[PASS] calc_nested_zero
+[PASS] calc_extra
+[PASS] calc_invalid_tokens
+[PASS] calc_large_inputs
+
+---- summary ----
+  calc          12 /  12
+  reg            6 /   6
+  ws             3 /   3
+  TOTAL         21 /  21
+<end of output>
+Test time =   0.37 sec
+----------------------------------------------------------
+Test Passed.
+"p3" end time: Oct 26 22:32 EDT
+"p3" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/4 Testing: tool_loop
+3/4 Test: tool_loop
+Command: "/home/oromis/ece309/ece309-harness/build/test_loop"
+Directory: /home/oromis/ece309/ece309-harness/build
+"tool_loop" start time: Oct 26 22:32 EDT
+Output:
+----------------------------------------------------------
+[PASS] loop_model_tool_model_without_user_turn
+[PASS] loop_escape_attempt_is_an_error_not_a_crash
+[PASS] loop_chained_tool_rounds
+[PASS] loop_tool_step_limit
+[PASS] loop_without_registry_is_p2_behavior
+[PASS] loop_sentinel_wins_over_tool_call
+[PASS] loop_client_error
+[PASS] loop_system_message_lists_tools
+[PASS] loop_transcript_round_trip_with_tools
+
+---- summary ----
+  loop           9 /   9
+  TOTAL          9 /   9
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"tool_loop" end time: Oct 26 22:32 EDT
+"tool_loop" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/4 Testing: e2e
+4/4 Test: e2e
+Command: "/usr/bin/bash" "/home/oromis/ece309/ece309-harness/tests/e2e/run_e2e.sh" "/home/oromis/ece309/ece309-harness/build/miniharness"
+Directory: /home/oromis/ece309/ece309-harness
+"e2e" start time: Oct 26 22:32 EDT
+Output:
+----------------------------------------------------------
+[PASS] e2e_escape_attempt
+[PASS] e2e_greeting
+[PASS] e2e_malformed_calls
+[PASS] e2e_runaway
+[PASS] e2e_split_test
+[PASS] e2e_tools_demo
+[PASS] e2e_tools_list
+e2e: 7 / 7 passed
+<end of output>
+Test time =   0.37 sec
+----------------------------------------------------------
+Test Passed.
+"e2e" end time: Oct 26 22:32 EDT
+"e2e" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 26 22:32 EDT
